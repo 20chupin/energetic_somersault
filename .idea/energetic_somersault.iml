@@ -4,6 +4,9 @@
     <content url="file://$MODULE_DIR$" />
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="module" module-name="bioptim" />
+    <orderEntry type="module" module-name="variational_integrator" />
+    <orderEntry type="module" module-name="ode-solvers" />
   </component>
   <component name="PyDocumentationSettings">
     <option name="format" value="NUMPY" />

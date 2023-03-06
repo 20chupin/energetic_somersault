@@ -63,15 +63,17 @@ class MillerOcpOnePhase:
     def __init__(
         self,
         biorbd_model_path: str = None,
-        n_shooting: float = 125,
-        phase_durations: float = 1.50187,  # actualized with results from https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4096894
+        n_shooting: float = None,
         n_threads: int = 8,
         ode_solver: OdeSolver = OdeSolver.RK4(),
         rigidbody_dynamics: RigidBodyDynamics = RigidBodyDynamics.ODE,
         dynamics_function: DynamicsFcn = DynamicsFcn.TORQUE_DRIVEN,
-        vertical_velocity_0: float = 8.30022867e00,  # actualized with results from https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4096894
-        somersaults: float = 4 * np.pi,
+        # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9168200/
+        # https://www-ncbi-nlm-nih-gov.portail.psl.eu/pmc/articles/PMC4424452/
+        vertical_velocity_0: float = 2.7,
+        somersaults: float = 2 * np.pi,
         twists: float = 2 * np.pi,
+        jump_height: float = 1.0,
         use_sx: bool = False,
         extra_obj: bool = False,
         initial_x: InitialGuessList = None,
@@ -112,17 +114,22 @@ class MillerOcpOnePhase:
         """
         self.biorbd_model_path = biorbd_model_path
         self.extra_obj = extra_obj
-        self.n_shooting = n_shooting
+        if n_shooting is not None:
+            self.n_shooting = n_shooting
+        else:
+            self.n_shooting = int(125 * jump_height)
         self.n_phases = 1
 
         self.somersaults = somersaults
         self.twists = twists
+        self.jump_height = jump_height
 
         self.x = None
         self.u = None
 
-        self.phase_durations = phase_durations
-        self.phase_time = phase_durations
+        parable_duration = (vertical_velocity_0 + np.sqrt(vertical_velocity_0 ** 2 + 2 * 9.81 * jump_height)) / 9.81
+        self.phase_durations = parable_duration
+        self.phase_time = parable_duration
 
         self.duration = np.sum(self.phase_durations)
         self.phase_proportions = 0.8966564714409299
@@ -344,12 +351,10 @@ class MillerOcpOnePhase:
         # if self.x is None:
         self.x = np.zeros((self.n_q + self.n_qdot, total_n_shooting))
 
-        # determine v such that final z == 0
-        v0 = 1 / 2 * 9.81 * self.duration  #
         # time vector
         data_point = np.linspace(0, self.duration, total_n_shooting)
         # parabolic trajectory on Z
-        self.x[2, :] = v0 * data_point + -9.81 / 2 * data_point**2
+        self.x[2, :] = self.jump_height + self.vertical_velocity_0 * data_point + -9.81 / 2 * data_point**2
         # Somersaults
         self.x[3, :] = np.linspace(0, self.phase_proportions * self.somersaults, self.n_shooting + 1)
         # Twists
@@ -389,6 +394,7 @@ class MillerOcpOnePhase:
         Set the initial states of the optimal control problem.
         """
         X0 = np.zeros((self.n_q + self.n_qdot, self.n_shooting + 1)) if X0 is None else X0
+        X0[2, :] = self.jump_height
         self.x_init.add(X0, interpolation=InterpolationType.EACH_FRAME)
 
     def _set_initial_controls(self, U0: np.array = None):
@@ -475,7 +481,7 @@ class MillerOcpOnePhase:
         x_min[: self.n_q, 0] = [
             0,
             0,
-            0,
+            self.jump_height,
             0,
             0,
             0,
@@ -510,7 +516,7 @@ class MillerOcpOnePhase:
         x_max[: self.n_q, 0] = [
             0,
             0,
-            0,
+            self.jump_height,
             0,
             0,
             0,
@@ -564,7 +570,7 @@ class MillerOcpOnePhase:
         x_max[: self.n_q, 1] = [
             3,
             3,
-            10,
+            self.jump_height + 10,
             self.somersaults + slack_somersault,
             tilt_bound,
             self.twists + slack_twist,
@@ -583,7 +589,7 @@ class MillerOcpOnePhase:
         x_min[: self.n_q, 2] = [
             -0.01,
             -0.1,
-            1.45,
+            0.0,
             self.somersaults - 2 * np.pi / 4 - slack_somersault,
             -tilt_final_bound,
             self.twists - slack_twist,
@@ -601,7 +607,7 @@ class MillerOcpOnePhase:
         x_max[: self.n_q, 2] = [
             0.01,
             0.1,
-            1.50,
+            0.0,
             self.somersaults - 2 * np.pi / 4 + slack_somersault,
             tilt_final_bound,
             self.twists + slack_twist,
@@ -631,8 +637,8 @@ class MillerOcpOnePhase:
             self.u_bounds.add([self.tau_min] * self.n_tau, [self.tau_max] * self.n_tau)
             self.u_bounds[0].min[self.high_torque_idx, :] = self.tau_hips_min
             self.u_bounds[0].max[self.high_torque_idx, :] = self.tau_hips_max
-        elif self.dynamics_function == DynamicsFcn.JOINTS_ACCELERATION_DRIVEN:
-            self.u_bounds.add([self.qddot_min] * self.n_qddot, [self.qddot_max] * self.n_qddot)
+        # elif self.dynamics_function == DynamicsFcn.JOINTS_ACCELERATION_DRIVEN:
+        #     self.u_bounds.add([self.qddot_min] * self.n_qddot, [self.qddot_max] * self.n_qddot)
         # elif self.rigidbody_dynamics == RigidBodyDynamics.DAE_INVERSE_DYNAMICS:
         #     self.u_bounds.add(
         #         [self.tau_min] * self.n_tau + [self.qddot_min] * self.n_qddot,
