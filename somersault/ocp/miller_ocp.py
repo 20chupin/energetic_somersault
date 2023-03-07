@@ -22,6 +22,7 @@ from bioptim import (
     BiMappingList,
     MultinodeConstraintList,
     RigidBodyDynamics,
+    BiorbdModel
 )
 
 
@@ -63,15 +64,17 @@ class MillerOcp:
     def __init__(
         self,
         biorbd_model_path: str = None,
-        n_shooting: tuple = (125, 25),
-        phase_durations: tuple = (1.351875, 0.193125),  # t_tot = 1.545 (7/8, 1/8)
         n_threads: int = 8,
         ode_solver: OdeSolver = OdeSolver.RK4(),
         rigidbody_dynamics: RigidBodyDynamics = RigidBodyDynamics.ODE,
         dynamics_function: DynamicsFcn = DynamicsFcn.TORQUE_DRIVEN,
-        vertical_velocity_0: float = 9.2,  # Real data 9.2 before
-        somersaults: float = 4 * np.pi,
-        twists: float = 6 * np.pi,
+        # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9168200/
+        # https://www-ncbi-nlm-nih-gov.portail.psl.eu/pmc/articles/PMC4424452/
+        vertical_velocity_0_min: float = 2.0,
+        vertical_velocity_0_max: float = 3.0,
+        somersaults: float = 2 * 2 * np.pi,
+        twists: float = 2 * 2 * np.pi,
+        jump_height: float = 1.0,
         use_sx: bool = False,
         extra_obj: bool = False,
         initial_x: InitialGuessList = None,
@@ -112,16 +115,24 @@ class MillerOcp:
         """
         self.biorbd_model_path = biorbd_model_path
         self.extra_obj = extra_obj
-        self.n_shooting = n_shooting
-        self.n_phases = len(n_shooting)
+        self.n_phases = 2
 
         self.somersaults = somersaults
         self.twists = twists
+        self.jump_height = jump_height
 
         self.x = None
         self.u = None
 
-        self.phase_durations = (1.351875, 0.193125) if phase_durations is None else phase_durations
+        self.vertical_velocity_0_min = vertical_velocity_0_min
+        self.vertical_velocity_0_max = vertical_velocity_0_max
+
+        vertical_velocity_0 = (vertical_velocity_0_min + vertical_velocity_0_max) / 2
+        parable_duration = (vertical_velocity_0 + np.sqrt(vertical_velocity_0 ** 2 + 2 * 9.81 * jump_height)) / 9.81
+
+        self.n_shooting = (int(100 * parable_duration), 25)
+
+        self.phase_durations = (parable_duration, 0.193125)
         self.phase_time = self.phase_durations
 
         self.duration = np.sum(self.phase_durations)
@@ -140,15 +151,15 @@ class MillerOcp:
 
         if biorbd_model_path is not None:
             self.biorbd_model = (
-                biorbd.Model(biorbd_model_path),
-                biorbd.Model(biorbd_model_path),
+                BiorbdModel(biorbd_model_path),
+                BiorbdModel(biorbd_model_path),
             )
             self.rigidbody_dynamics = rigidbody_dynamics
             self.dynamics_function = dynamics_function
 
-            self.n_q = self.biorbd_model[0].nbQ()
-            self.n_qdot = self.biorbd_model[0].nbQdot()
-            self.nb_root = self.biorbd_model[0].nbRoot()
+            self.n_q = self.biorbd_model[0].nb_q
+            self.n_qdot = self.biorbd_model[0].nb_qdot
+            self.nb_root = self.biorbd_model[0].nb_root
 
             if (
                 self.rigidbody_dynamics == MillerDynamics.IMPLICIT
@@ -156,20 +167,20 @@ class MillerOcp:
                 or self.rigidbody_dynamics == RigidBodyDynamics.DAE_INVERSE_DYNAMICS_JERK
                 or self.rigidbody_dynamics == MillerDynamics.ROOT_IMPLICIT_QDDDOT
             ):
-                self.n_qddot = self.biorbd_model[0].nbQddot()
+                self.n_qddot = self.biorbd_model[0].nb_qddot
             elif (
                 self.dynamics_function == DynamicsFcn.TORQUE_DRIVEN
                 or self.dynamics_function == DynamicsFcn.JOINTS_ACCELERATION_DRIVEN
             ):
-                self.n_qddot = self.biorbd_model[0].nbQddot() - self.biorbd_model[0].nbRoot()
+                self.n_qddot = self.biorbd_model[0].nb_qddot - self.biorbd_model[0].nb_root
 
-            self.n_tau = self.biorbd_model[0].nbGeneralizedTorque() - self.biorbd_model[0].nbRoot()
+            self.n_tau = self.biorbd_model[0].nb_tau - self.biorbd_model[0].nb_root
 
             if (
                 self.rigidbody_dynamics == RigidBodyDynamics.DAE_INVERSE_DYNAMICS_JERK
                 or self.rigidbody_dynamics == MillerDynamics.ROOT_IMPLICIT_QDDDOT
             ):
-                self.n_qdddot = self.biorbd_model[0].nbQddot()
+                self.n_qdddot = self.biorbd_model[0].nb_qddot
 
             self.tau_min, self.tau_init, self.tau_max = -100, 0, 100
             self.tau_hips_min, self.tau_hips_init, self.tau_hips_max = (
@@ -200,10 +211,10 @@ class MillerOcp:
             self.velocity_max = 100  # qdot
             self.velocity_max_phase_transition = 10  # qdot hips, thorax in phase 2
 
-            self.random_scale = 0.02  # relative to the maximal bounds of the states or controls
-            self.random_scale_qdot = 0.02
-            self.random_scale_qddot = 0.02
-            self.random_scale_tau = 0.02
+            self.random_scale = 0.0  # relative to the maximal bounds of the states or controls
+            self.random_scale_qdot = 0.0
+            self.random_scale_qddot = 0.0
+            self.random_scale_tau = 0.0
 
             self.dynamics = DynamicsList()
             self.constraints = ConstraintList()
@@ -439,12 +450,10 @@ class MillerOcp:
         # if self.x is None:
         self.x = np.zeros((self.n_q + self.n_qdot, total_n_shooting))
 
-        # determine v such that final z == 0
-        v0 = 1 / 2 * 9.81 * self.duration  #
         # time vector
         data_point = np.linspace(0, self.duration, total_n_shooting)
         # parabolic trajectory on Z
-        self.x[2, :] = v0 * data_point + -9.81 / 2 * data_point**2
+        self.x[2, :] = self.jump_height + self.vertical_velocity_0 * data_point + -9.81 / 2 * data_point**2
         # Somersaults
         self.x[3, :] = np.hstack(
             (
@@ -526,8 +535,11 @@ class MillerOcp:
         Set the initial states of the optimal control problem.
         """
         if X0 is None:
-            self.x_init.add([0] * (self.n_q + self.n_q))
+            X0 = np.zeros((self.n_q + self.n_qdot, self.n_shooting + 1))
+            X0[2, :] = self.jump_height
+            self.x_init.add(X0, interpolation=InterpolationType.EACH_FRAME)
         else:
+            X0[2, :] = self.jump_height
             mesh_point_init = 0
             for i in range(self.n_phases):
                 self.x_init.add(
@@ -623,7 +635,7 @@ class MillerOcp:
         x_min[0, : self.n_q, 0] = [
             0,
             0,
-            0,
+            self.jump_height,
             0,
             0,
             0,
@@ -640,7 +652,7 @@ class MillerOcp:
         x_min[0, self.n_q :, 0] = [
             self.velocity_x - slack_initial_translation_velocities,
             self.velocity_y - slack_initial_translation_velocities,
-            self.vertical_velocity_0 - slack_initial_vertical_velocity,
+            self.vertical_velocity_0_min,
             self.somersault_rate_0 - slack_initial_somersault_rate,
             0,
             0,
@@ -658,7 +670,7 @@ class MillerOcp:
         x_max[0, : self.n_q, 0] = [
             0,
             0,
-            0,
+            self.jump_height,
             0,
             0,
             0,
@@ -675,7 +687,7 @@ class MillerOcp:
         x_max[0, self.n_q :, 0] = [
             self.velocity_x + slack_initial_translation_velocities,
             self.velocity_y + slack_initial_translation_velocities,
-            self.vertical_velocity_0 + slack_initial_vertical_velocity,
+            self.vertical_velocity_0_max,
             self.somersault_rate_0 + slack_initial_somersault_rate,
             0,
             0,
@@ -712,7 +724,7 @@ class MillerOcp:
         x_max[0, : self.n_q, 1] = [
             3,
             3,
-            10,
+            self.jump_height + 10,
             self.somersaults + slack_somersault,
             tilt_bound,
             self.twists + slack_twist,
@@ -947,29 +959,29 @@ class MillerOcp:
                 self.u_bounds.add([self.tau_min] * self.n_tau, [self.tau_max] * self.n_tau)
                 self.u_bounds[0].min[self.high_torque_idx, :] = self.tau_hips_min
                 self.u_bounds[0].max[self.high_torque_idx, :] = self.tau_hips_max
-            elif self.dynamics_function == DynamicsFcn.JOINTS_ACCELERATION_DRIVEN:
-                self.u_bounds.add([self.qddot_min] * self.n_qddot, [self.qddot_max] * self.n_qddot)
-            elif self.rigidbody_dynamics == RigidBodyDynamics.DAE_INVERSE_DYNAMICS:
-                self.u_bounds.add(
-                    [self.tau_min] * self.n_tau + [self.qddot_min] * self.n_qddot,
-                    [self.tau_max] * self.n_tau + [self.qddot_max] * self.n_qddot,
-                )
-                self.u_bounds[0].min[self.high_torque_idx, :] = self.tau_hips_min
-                self.u_bounds[0].max[self.high_torque_idx, :] = self.tau_hips_max
-            elif self.rigidbody_dynamics == MillerDynamics.ROOT_IMPLICIT:
-                self.u_bounds.add([self.qddot_min] * self.n_qddot, [self.qddot_max] * self.n_qddot)
-            elif self.rigidbody_dynamics == RigidBodyDynamics.DAE_INVERSE_DYNAMICS_JERK:
-                self.u_bounds.add(
-                    [self.tau_min] * self.n_tau + [self.qdddot_min] * self.n_qdddot,
-                    [self.tau_max] * self.n_tau + [self.qdddot_max] * self.n_qdddot,
-                )
-                self.u_bounds[0].min[self.high_torque_idx, :] = self.tau_hips_min
-                self.u_bounds[0].max[self.high_torque_idx, :] = self.tau_hips_max
-            elif self.rigidbody_dynamics == MillerDynamics.ROOT_IMPLICIT_QDDDOT:
-                self.u_bounds.add(
-                    [self.qdddot_min] * self.n_qdddot,
-                    [self.qdddot_max] * self.n_qdddot,
-                )
+            # elif self.dynamics_function == DynamicsFcn.JOINTS_ACCELERATION_DRIVEN:
+            #     self.u_bounds.add([self.qddot_min] * self.n_qddot, [self.qddot_max] * self.n_qddot)
+            # elif self.rigidbody_dynamics == RigidBodyDynamics.DAE_INVERSE_DYNAMICS:
+            #     self.u_bounds.add(
+            #         [self.tau_min] * self.n_tau + [self.qddot_min] * self.n_qddot,
+            #         [self.tau_max] * self.n_tau + [self.qddot_max] * self.n_qddot,
+            #     )
+            #     self.u_bounds[0].min[self.high_torque_idx, :] = self.tau_hips_min
+            #     self.u_bounds[0].max[self.high_torque_idx, :] = self.tau_hips_max
+            # elif self.rigidbody_dynamics == MillerDynamics.ROOT_IMPLICIT:
+            #     self.u_bounds.add([self.qddot_min] * self.n_qddot, [self.qddot_max] * self.n_qddot)
+            # elif self.rigidbody_dynamics == RigidBodyDynamics.DAE_INVERSE_DYNAMICS_JERK:
+            #     self.u_bounds.add(
+            #         [self.tau_min] * self.n_tau + [self.qdddot_min] * self.n_qdddot,
+            #         [self.tau_max] * self.n_tau + [self.qdddot_max] * self.n_qdddot,
+            #     )
+            #     self.u_bounds[0].min[self.high_torque_idx, :] = self.tau_hips_min
+            #     self.u_bounds[0].max[self.high_torque_idx, :] = self.tau_hips_max
+            # elif self.rigidbody_dynamics == MillerDynamics.ROOT_IMPLICIT_QDDDOT:
+            #     self.u_bounds.add(
+            #         [self.qdddot_min] * self.n_qdddot,
+            #         [self.qdddot_max] * self.n_qdddot,
+            #     )
             else:
                 raise ValueError("This dynamics has not been implemented")
 

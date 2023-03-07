@@ -9,6 +9,18 @@ import pickle
 
 
 def get_created_data_from_pickle(file: str):
+    """
+    Creates data from pickle
+
+    Parameters
+    ----------
+    file: str
+        File where data has been saved
+
+    Returns
+    -------
+    Data
+    """
     with open(file, "rb") as f:
         while True:
             try:
@@ -47,10 +59,10 @@ def discrete_linear_momentum(
     The discrete total energy
     """
     n_frames = qdot.shape[1]
-    linear_momentum = np.zeros((n_frames - 1, 1))
-    for i in range(n_frames - 1):
-        linear_momentum[i] = biorbd_model.mass() * np.linalg.norm(qdot[:2, i])
-    return linear_momentum
+    d_linear_momentum = np.zeros(n_frames)
+    for i in range(n_frames):
+        d_linear_momentum[i] = biorbd_model.mass() * np.linalg.norm(qdot[:2, i])
+    return d_linear_momentum
 
 
 def discrete_angular_momentum(
@@ -75,10 +87,10 @@ def discrete_angular_momentum(
     The discrete angular_momentum
     """
     n_frames = q.shape[1]
-    angular_momentum = np.zeros((n_frames, 1))
+    d_angular_momentum = np.zeros(n_frames)
     for i in range(n_frames):
-        angular_momentum[i] = np.linalg.norm(biorbd_model.angularMomentum(q[:, i], qdot[:, i]).to_array())
-    return angular_momentum
+        d_angular_momentum[i] = np.linalg.norm(biorbd_model.angularMomentum(q[:, i], qdot[:, i]).to_array())
+    return d_angular_momentum
 
 
 def discrete_total_energy(
@@ -103,37 +115,49 @@ def discrete_total_energy(
     The discrete total energy
     """
     n_frames = q.shape[1]
-    discrete_total_energy = np.zeros((n_frames, 1))
-    for i in range(n_frames - 1):
-        discrete_total_energy[i] = biorbd_model.KineticEnergy(q[:, i], qdot[:, i]) + biorbd_model.PotentialEnergy(q[:, i])
-    return discrete_total_energy
+    d_total_energy = np.zeros(n_frames)
+    for i in range(n_frames):
+        d_total_energy[i] = biorbd_model.KineticEnergy(q[:, i], qdot[:, i]) + biorbd_model.PotentialEnergy(q[:, i])
+    return d_total_energy
 
 
 if __name__ == "__main__":
-    q, qdot, time = get_created_data_from_pickle("1m")
-    print(Models.ACROBAT.value)
+    q, qdot, time = get_created_data_from_pickle(f"2m")
     # b = bioviz.Viz(Models.ACROBAT.value, show_floor=True, show_meshes=True)
     # b.load_movement(q)
     # b.exec()
 
+    plt.plot(q[3, :] / (2 * np.pi))
+    plt.show()
+
+    delta_energy = []
+    delta_am = []
+    delta_lm = []
+
     fig_time, axs_time = plt.subplots(1, 3, sharex=True)
     fig_delta, axs_delta = plt.subplots(1, 3, sharex=True)
 
-    model = biorbd.Model(Models.ACROBAT.value)
+    heights = [1, 2]
 
-    energy = discrete_total_energy(model, q, qdot)
-    angular_momentum = discrete_angular_momentum(model, q, qdot)
-    linear_momentum = discrete_linear_momentum(model, qdot)
-    delta_energy = energy[-1] - energy[0]
-    delta_am = angular_momentum[-1] - angular_momentum[0]
-    delta_lm = linear_momentum[-1] - linear_momentum[0]
+    for height in heights:
+        q, qdot, time = get_created_data_from_pickle(f"{height}m")
 
-    axs_time[0].plot(time, energy)  #, label=ode_solver)
-    axs_time[1].plot(time, angular_momentum)  #, label=ode_solver)
-    axs_time[2].plot(time[:-1], linear_momentum)  #, label=ode_solver)
-    axs_delta[0].plot(1.0, delta_energy, "+")  #, label=ode_solver)
-    axs_delta[1].plot(1.0, delta_am, "+")  #, label=ode_solver)
-    axs_delta[2].plot(1.0, delta_lm, "+")  #, label=ode_solver)
+        model = biorbd.Model(Models.ACROBAT.value)
+
+        energy = discrete_total_energy(model, q, qdot)
+        angular_momentum = discrete_angular_momentum(model, q, qdot)
+        linear_momentum = discrete_linear_momentum(model, qdot)
+        delta_energy.append(energy[-1] - energy[0])
+        delta_am.append(angular_momentum[-1] - angular_momentum[0])
+        delta_lm.append(linear_momentum[-1] - linear_momentum[0])
+
+        axs_time[0].plot(time, energy, label=f"{height}m")
+        axs_time[1].plot(time, angular_momentum, label=f"{height}m")
+        axs_time[2].plot(time, linear_momentum, label=f"{height}m")
+
+    axs_delta[0].plot(heights, delta_energy, label=f"RK4")
+    axs_delta[1].plot(heights, delta_am, label=f"RK4")
+    axs_delta[2].plot(heights, delta_lm, label=f"RK4")
 
     axs_time[0].set_title("Total energy")
     axs_time[1].set_title("Angular momentum norm")

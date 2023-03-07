@@ -1,6 +1,5 @@
 from enum import Enum
 
-import biorbd_casadi as biorbd
 import numpy as np
 from scipy import interpolate
 from bioptim import (
@@ -114,10 +113,6 @@ class MillerOcpOnePhase:
         """
         self.biorbd_model_path = biorbd_model_path
         self.extra_obj = extra_obj
-        if n_shooting is not None:
-            self.n_shooting = n_shooting
-        else:
-            self.n_shooting = int(125 * jump_height)
         self.n_phases = 1
 
         self.somersaults = somersaults
@@ -130,6 +125,11 @@ class MillerOcpOnePhase:
         parable_duration = (vertical_velocity_0 + np.sqrt(vertical_velocity_0 ** 2 + 2 * 9.81 * jump_height)) / 9.81
         self.phase_durations = parable_duration
         self.phase_time = parable_duration
+
+        if n_shooting is not None:
+            self.n_shooting = n_shooting
+        else:
+            self.n_shooting = int(100 * parable_duration)
 
         self.duration = np.sum(self.phase_durations)
         self.phase_proportions = 0.8966564714409299

@@ -30,7 +30,6 @@ def get_created_data_from_pickle(file: str):
 
 
 q, q_dot = get_created_data_from_pickle("1m")
-print(Models.ACROBAT.value)
 b = bioviz.Viz(Models.ACROBAT.value, show_floor=True, show_meshes=True)
 b.load_movement(q)
 b.exec()
