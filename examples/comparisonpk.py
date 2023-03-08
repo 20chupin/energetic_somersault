@@ -27,7 +27,17 @@ def get_created_data_from_pickle(file: str):
                 data_tmp = pickle.load(f)
             except:
                 break
-        datas_shape = (data_tmp["states"][0]["q"].shape[0], data_tmp["states"][0]["q"].shape[1] + data_tmp["states"][1]["q"].shape[1])
+        print(f"{file}: cost:{data_tmp['cost']}, time to optimize: {data_tmp['real_time_to_optimize']}")
+        print(
+            f"1ère phase : {data_tmp['time'][0][-1] - data_tmp['time'][0][0]}, {data_tmp['states'][0]['q'].shape[1]} "
+            f"noeuds")
+        print(
+            f"2ère phase : {data_tmp['time'][1][-1] - data_tmp['time'][1][0]}, {data_tmp['states'][1]['q'].shape[1]} "
+            f"noeuds")
+
+        datas_shape = (
+            data_tmp["states"][0]["q"].shape[0],
+            data_tmp["states"][0]["q"].shape[1] + data_tmp["states"][1]["q"].shape[1])
 
         datas_q = np.zeros(datas_shape)
         datas_q[:, :data_tmp["states"][0]["q"].shape[1]] = data_tmp["states"][0]["q"]
@@ -37,7 +47,10 @@ def get_created_data_from_pickle(file: str):
         datas_qdot[:, :data_tmp["states"][0]["qdot"].shape[1]] = data_tmp["states"][0]["qdot"]
         datas_qdot[:, data_tmp["states"][0]["qdot"].shape[1]:] = data_tmp["states"][1]["qdot"]
 
-        datas_time = data_tmp["time"]
+        datas_time = np.zeros(datas_shape[1])
+        datas_time[:data_tmp["time"][0].shape[0]] = data_tmp["time"][0]
+        datas_time[data_tmp["time"][0].shape[0]:] = data_tmp["time"][1]
+
         # datas_tau = data_tmp["controls"]["tau"]
         # data_status = data_tmp["status"]
         # data_mus = data_tmp["controls"]["muscles"]
@@ -45,7 +58,7 @@ def get_created_data_from_pickle(file: str):
         # data_it = data_tmp["iterations"]
         # data_cost = data_tmp["detailed_cost"]
 
-        return np.asarray(datas_q), np.asarray(datas_qdot), datas_time,  # datas_tau, data_status, data_it, data_time, data_cost
+        return np.asarray(datas_q), np.asarray(datas_qdot), np.asarray(datas_time)
 
 
 def discrete_linear_momentum(
@@ -130,7 +143,7 @@ def discrete_total_energy(
 
 
 if __name__ == "__main__":
-    q, qdot, time = get_created_data_from_pickle(f"5m")
+    # q, qdot, time = get_created_data_from_pickle(f"1m")
     # b = bioviz.Viz(Models.ACROBAT.value, show_floor=True, show_meshes=True)
     # b.load_movement(q)
     # b.exec()
@@ -142,11 +155,10 @@ if __name__ == "__main__":
     fig_time, axs_time = plt.subplots(1, 3, sharex=True)
     fig_delta, axs_delta = plt.subplots(1, 3, sharex=True)
 
-    heights = [3, 5]
+    heights = [1, 3, 5]
 
     for height in heights:
         q, qdot, time = get_created_data_from_pickle(f"{height}m")
-
         model = biorbd.Model(Models.ACROBAT.value)
 
         energy = discrete_total_energy(model, q, qdot)

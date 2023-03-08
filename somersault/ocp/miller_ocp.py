@@ -130,7 +130,7 @@ class MillerOcp:
         vertical_velocity_0 = (vertical_velocity_0_min + vertical_velocity_0_max) / 2
         parable_duration = (vertical_velocity_0 + np.sqrt(vertical_velocity_0 ** 2 + 2 * 9.81 * jump_height)) / 9.81
 
-        self.n_shooting = (int(100 * parable_duration), 25)
+        self.n_shooting = (int(100 * parable_duration), 14)
 
         self.phase_durations = (parable_duration, 0.193125)
         self.phase_time = self.phase_durations
@@ -413,7 +413,7 @@ class MillerOcp:
             node=Node.END,
         )
 
-        slack_duration = 0.15
+        slack_duration = 0.25
         self.objective_functions.add(
             ObjectiveFcn.Mayer.MINIMIZE_TIME,
             min_bound=self.phase_durations[0] - slack_duration,
