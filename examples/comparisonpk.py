@@ -27,7 +27,8 @@ def get_created_data_from_pickle(file: str):
                 data_tmp = pickle.load(f)
             except:
                 break
-        print(f"{file}: cost:{data_tmp['cost']}, time to optimize: {data_tmp['real_time_to_optimize']}")
+        print(f"{file}: cost:{data_tmp['cost']}, time to optimize: {data_tmp['real_time_to_optimize']}, "
+              f"nb_it: {data_tmp['iterations']}")
         print(
             f"1ère phase : {data_tmp['time'][0][-1] - data_tmp['time'][0][0]}, {data_tmp['states'][0]['q'].shape[1]} "
             f"noeuds")
@@ -143,7 +144,7 @@ def discrete_total_energy(
 
 
 if __name__ == "__main__":
-    # q, qdot, time = get_created_data_from_pickle(f"1m")
+    # q, qdot, time = get_created_data_from_pickle(f"10m")
     # b = bioviz.Viz(Models.ACROBAT.value, show_floor=True, show_meshes=True)
     # b.load_movement(q)
     # b.exec()
@@ -155,7 +156,7 @@ if __name__ == "__main__":
     fig_time, axs_time = plt.subplots(1, 3, sharex=True)
     fig_delta, axs_delta = plt.subplots(1, 3, sharex=True)
 
-    heights = [1, 3, 5]
+    heights = [1, 3, 5, 10]
 
     for height in heights:
         q, qdot, time = get_created_data_from_pickle(f"{height}m")
