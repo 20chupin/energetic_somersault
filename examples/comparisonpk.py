@@ -27,8 +27,16 @@ def get_created_data_from_pickle(file: str):
                 data_tmp = pickle.load(f)
             except:
                 break
-        datas_q = data_tmp["states"]["q"]
-        datas_qdot = data_tmp["states"]["qdot"]
+        datas_shape = (data_tmp["states"][0]["q"].shape[0], data_tmp["states"][0]["q"].shape[1] + data_tmp["states"][1]["q"].shape[1])
+
+        datas_q = np.zeros(datas_shape)
+        datas_q[:, :data_tmp["states"][0]["q"].shape[1]] = data_tmp["states"][0]["q"]
+        datas_q[:, data_tmp["states"][0]["q"].shape[1]:] = data_tmp["states"][1]["q"]
+
+        datas_qdot = np.zeros(datas_shape)
+        datas_qdot[:, :data_tmp["states"][0]["qdot"].shape[1]] = data_tmp["states"][0]["qdot"]
+        datas_qdot[:, data_tmp["states"][0]["qdot"].shape[1]:] = data_tmp["states"][1]["qdot"]
+
         datas_time = data_tmp["time"]
         # datas_tau = data_tmp["controls"]["tau"]
         # data_status = data_tmp["status"]
@@ -37,7 +45,7 @@ def get_created_data_from_pickle(file: str):
         # data_it = data_tmp["iterations"]
         # data_cost = data_tmp["detailed_cost"]
 
-        return datas_q, datas_qdot, datas_time,  # datas_tau, data_status, data_it, data_time, data_cost
+        return np.asarray(datas_q), np.asarray(datas_qdot), datas_time,  # datas_tau, data_status, data_it, data_time, data_cost
 
 
 def discrete_linear_momentum(
@@ -122,13 +130,10 @@ def discrete_total_energy(
 
 
 if __name__ == "__main__":
-    q, qdot, time = get_created_data_from_pickle(f"2m")
+    q, qdot, time = get_created_data_from_pickle(f"5m")
     # b = bioviz.Viz(Models.ACROBAT.value, show_floor=True, show_meshes=True)
     # b.load_movement(q)
     # b.exec()
-
-    plt.plot(q[3, :] / (2 * np.pi))
-    plt.show()
 
     delta_energy = []
     delta_am = []
@@ -137,7 +142,7 @@ if __name__ == "__main__":
     fig_time, axs_time = plt.subplots(1, 3, sharex=True)
     fig_delta, axs_delta = plt.subplots(1, 3, sharex=True)
 
-    heights = [1, 2]
+    heights = [3, 5]
 
     for height in heights:
         q, qdot, time = get_created_data_from_pickle(f"{height}m")
