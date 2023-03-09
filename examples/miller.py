@@ -30,7 +30,7 @@ def save_results(sol, c3d_file_path):
 
 
 def main():
-    height = 10
+    height = 20
 
     equation_of_motion = DynamicsFcn.TORQUE_DRIVEN
 

@@ -144,7 +144,7 @@ def discrete_total_energy(
 
 
 if __name__ == "__main__":
-    # q, qdot, time = get_created_data_from_pickle(f"10m")
+    # q, qdot, time = get_created_data_from_pickle(f"15m")
     # b = bioviz.Viz(Models.ACROBAT.value, show_floor=True, show_meshes=True)
     # b.load_movement(q)
     # b.exec()
@@ -156,7 +156,7 @@ if __name__ == "__main__":
     fig_time, axs_time = plt.subplots(1, 3, sharex=True)
     fig_delta, axs_delta = plt.subplots(1, 3, sharex=True)
 
-    heights = [1, 3, 5, 10]
+    heights = [1, 3, 5, 10, 15]
 
     for height in heights:
         q, qdot, time = get_created_data_from_pickle(f"{height}m")
