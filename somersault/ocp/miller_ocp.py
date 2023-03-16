@@ -260,7 +260,6 @@ class MillerOcp:
                 ode_solver=ode_solver,
                 use_sx=use_sx,
             )
-            self._print_bounds()
 
     def _set_dynamics(self):
         """
@@ -283,8 +282,9 @@ class MillerOcp:
 
         # --- Objective function --- #
         w_qdot = 1
-        w_penalty = 1
+        w_penalty = 10
         w_penalty_foot = 10
+        w_penalty_hips = 100
         w_penalty_core = 10
         w_track_final = 0.1
         w_angular_momentum_x = 100000
@@ -331,6 +331,14 @@ class MillerOcp:
                 index=(6, 7, 8, 13, 14),
                 key="q",
                 weight=w_penalty_core,
+                phase=i,
+            )  # core DoFs
+
+            self.objective_functions.add(
+                ObjectiveFcn.Lagrange.MINIMIZE_STATE,
+                index=14,
+                key="q",
+                weight=w_penalty_hips,
                 phase=i,
             )  # core DoFs
 
@@ -612,9 +620,16 @@ class MillerOcp:
         arm_rotation_z_low = 1
         arm_elevation_y_low = 0.01
         arm_elevation_y_upp = np.pi - 0.01
+        arm_end_y_low = 0.0
+        arm_end_y_high = 0.48
+        arm_end_z_low = 0.9
+        arm_end_z_high = np.pi
         thorax_hips_xyz = np.pi / 6
         self.thorax_hips_xyz = thorax_hips_xyz
         arm_rotation_y_final = 2.4
+        hips_x_low = -15 * np.pi / 180
+        hips_x_high = np.pi / 2
+        hips_y = 20 * np.pi / 180
 
         slack_initial_vertical_velocity = 2
         slack_initial_somersault_rate = 3
@@ -716,8 +731,8 @@ class MillerOcp:
             -arm_elevation_y_upp,
             -arm_rotation_z_upp,
             arm_elevation_y_low,
-            -thorax_hips_xyz,
-            -thorax_hips_xyz,
+            hips_x_low,
+            -hips_y,
         ]
         x_min[0, self.n_q :, 1] = -self.velocity_max
 
@@ -735,8 +750,8 @@ class MillerOcp:
             -arm_elevation_y_low,
             arm_rotation_z_low,
             arm_elevation_y_upp,
-            thorax_hips_xyz,
-            thorax_hips_xyz,
+            hips_x_high,
+            hips_y,
         ]
         x_max[0, self.n_q :, 1] = +self.velocity_max
 
@@ -864,10 +879,10 @@ class MillerOcp:
             -slack_final_dofs,
             -slack_final_dofs,
             -slack_final_dofs,
-            -arm_rotation_z_low,
-            -arm_elevation_y_upp,
-            -arm_rotation_z_upp,
-            arm_rotation_y_final,
+            -arm_end_z_high,
+            arm_end_y_low,
+            arm_end_z_low,
+            -arm_end_y_high,
             thorax_hips_xyz - slack_final_dofs,
             -slack_final_dofs,
         ]
@@ -899,10 +914,10 @@ class MillerOcp:
             slack_final_dofs,
             slack_final_dofs,
             slack_final_dofs,
-            arm_rotation_z_upp,
-            -arm_rotation_y_final,
-            arm_rotation_z_low,
-            arm_elevation_y_upp,
+            -arm_end_z_low,
+            arm_end_y_high,
+            arm_end_z_high,
+            arm_end_y_low,
             thorax_hips_xyz,
             slack_final_dofs,
         ]
@@ -985,30 +1000,6 @@ class MillerOcp:
             else:
                 raise ValueError("This dynamics has not been implemented")
 
-    def _interpolate_initial_states(self, X0: np.array):
-        """
-        Interpolate the initial states to match the number of shooting nodes
-        """
-        print("interpolating initial states to match the number of shooting nodes")
-        x = np.linspace(0, self.phase_time, X0.shape[1])
-        y = X0
-        f = interpolate.interp1d(x, y)
-        x_new = np.linspace(0, self.phase_time, np.sum(self.n_shooting) + len(self.n_shooting))
-        y_new = f(x_new)  # use interpolation function returned by `interp1d`
-        return y_new
-
-    def _interpolate_initial_controls(self, U0: np.array):
-        """
-        Interpolate the initial controls to match the number of shooting nodes
-        """
-        print("interpolating initial controls to match the number of shooting nodes")
-        x = np.linspace(0, self.phase_time, U0.shape[1])
-        y = U0
-        f = interpolate.interp1d(x, y)
-        x_new = np.linspace(0, self.phase_time, self.n_shooting)
-        y_new = f(x_new)  # use interpolation function returned by `interp1d`
-        return y_new
-
     def _set_mapping(self):
         """
         Set the mapping between the states and controls of the model
@@ -1016,8 +1007,8 @@ class MillerOcp:
         if self.dynamics_function == DynamicsFcn.TORQUE_DRIVEN:
             self.mapping.add(
                 "tau",
-                [None, None, None, None, None, None, 0, 1, 2, 3, 4, 5, 6, 7, 8],
-                [6, 7, 8, 9, 10, 11, 12, 13, 14],
+                to_second=[None, None, None, None, None, None, 0, 1, 2, 3, 4, 5, 6, 7, 8],
+                to_first=[6, 7, 8, 9, 10, 11, 12, 13, 14],
             )
         elif self.dynamics_function == DynamicsFcn.JOINTS_ACCELERATION_DRIVEN:
             print("no bimapping")
@@ -1039,39 +1030,3 @@ class MillerOcp:
             pass
         else:
             raise ValueError("This dynamics has not been implemented")
-
-    def _print_bounds(self):
-        """
-        Prints the bounds of the states
-        """
-        max = []
-        min = []
-        for nlp in self.ocp.nlp:
-            max.append(np.array(nlp.x_bounds.max.tolist()))
-            min.append(np.array(nlp.x_bounds.min.tolist()))
-
-        s = ""
-        for i, nlp in enumerate(self.ocp.nlp):
-            s += f"Phase {i}"
-            s += 14 * " " + 2 * 21 * " "
-        print(s)
-
-        s = ""
-        for i, nlp in enumerate(self.ocp.nlp):
-            s += f"Beginning"
-            s += 12 * " "
-            s += f"Middle"
-            s += 15 * " "
-            s += f"End"
-            s += 18 * " "
-        print(s)
-
-        for i in range(nlp.x_bounds.shape[0]):
-            s = ""
-            coef = 180 / np.pi if i > 2 else 1
-            for p, nlp in enumerate(self.ocp.nlp):
-                for j in range(len(min[p][i])):
-                    str_interval = f"[{np.round(min[p][i][j] * coef,3)}, {np.round(max[p][i][j] * coef,3)}]"
-                    str_interval += (21 - str_interval.__len__()) * " "
-                    s += str_interval
-            print(s)
