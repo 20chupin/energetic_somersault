@@ -161,8 +161,8 @@ def discrete_total_energy(
 
 
 if __name__ == "__main__":
-    height = 5
-    q, qdot, time, ns = get_created_data_from_pickle(f"{height}m_RK4_0315")
+    height = 15
+    q, qdot, time, ns = get_created_data_from_pickle(f"{height}m_RK4_0317")
 
     model = biorbd.Model(Models.ACROBAT.value)
 
@@ -184,12 +184,15 @@ if __name__ == "__main__":
     b.stop_recording()
     b.quit()
 
-    # height = 15
-    #
+    # # height = 15
+    # #
     # delta_energy = []
     # delta_am = []
     # delta_lm = []
     #
+    # plt.figure(1)
+    # plt.title("Total energy")
+    # plt.figure(2)
     # fig_time, axs_time = plt.subplots(1, 3, sharex=True)
     # fig_delta, axs_delta = plt.subplots(1, 3, sharex=True)
     # fig_lm, axs_lm = plt.subplots(1, 3, sharex=True)
@@ -215,6 +218,9 @@ if __name__ == "__main__":
     #         delta_am.append(angular_momentum)
     #         delta_lm.append(linear_momentum)
     #
+    #         plt.figure(1)
+    #         plt.plot(time, energy, label=f"{height}m_{ode_solver}")
+    #
     #         axs_time[0].plot(time, energy, label=f"{height}m_{ode_solver}")
     #         axs_time[1].plot(time, angular_momentum, label=f"{height}m_{ode_solver}")
     #         axs_time[2].plot(time, linear_momentum, label=f"{height}m_{ode_solver}")
@@ -231,6 +237,9 @@ if __name__ == "__main__":
     # # axs_delta[1].boxplot(delta_am, labels=heights)
     # # axs_delta[2].boxplot(delta_lm, labels=heights)
     # # axs_time[2].legend(ncols=3, bbox_to_anchor=(0, -0.05))
+    #
+    # plt.figure(1)
+    # plt.legend()
     #
     # axs_time[0].set_title("Total energy")
     # axs_time[1].set_title("Angular momentum norm")

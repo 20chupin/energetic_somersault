@@ -32,7 +32,6 @@ def save_results(sol, c3d_file_path):
 
 
 def main():
-    # height = 5
     for height in (10, 15, 20, 25):
 
         equation_of_motion = DynamicsFcn.TORQUE_DRIVEN
@@ -44,8 +43,7 @@ def main():
             ode_solver=OdeSolver.RK4(),
             biorbd_model_path=model_path,
             dynamics_function=equation_of_motion,
-            n_threads=32,  # if your computer has enough cores, otherwise it takes them all
-            seed=42,  # The sens of life
+            n_threads=3,  # if your computer has enough cores, otherwise it takes them all
             jump_height=height
         )
 
@@ -56,16 +54,16 @@ def main():
 
         miller.ocp.print(to_console=True, to_graph=False)
 
-        solv = Solver.IPOPT(show_online_optim=True, show_options=dict(show_bounds=True))
+        solv = Solver.IPOPT(show_online_optim=False, show_options=dict(show_bounds=True))
         solv.set_maximum_iterations(300 * height)
         solv.set_linear_solver("ma57")
         solv.set_print_level(5)
         sol = miller.ocp.solve(solv)
 
-        save_results(sol, f"{height}m_RK4_0316")
+        save_results(sol, f"{height}m_RK4_0317")
 
         # --- Show results --- #
-        sol.graphs(show_bounds=True)
+        # sol.graphs(show_bounds=True)
 
 
 if __name__ == "__main__":
