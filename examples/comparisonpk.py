@@ -27,7 +27,7 @@ def get_created_data_from_pickle(file: str):
                 data_tmp = pickle.load(f)
             except:
                 break
-        print(f"{file}: cost:{data_tmp['cost']}, time to optimize: {data_tmp['real_time_to_optimize']}, "
+        print(f"{file}: status: {data_tmp['status']}, cost:{data_tmp['cost']}, time to optimize: {data_tmp['real_time_to_optimize']}, "
               f"nb_it: {data_tmp['iterations']}")
         print(
             f"1ère phase : {data_tmp['time'][0][-1] - data_tmp['time'][0][0]}, {data_tmp['states'][0]['q'].shape[1]} "
@@ -161,103 +161,130 @@ def discrete_total_energy(
 
 
 if __name__ == "__main__":
-    height = 15
-    q, qdot, time, ns = get_created_data_from_pickle(f"{height}m_RK4_0317")
-
-    model = biorbd.Model(Models.ACROBAT.value)
-
-    # Video
-    b = bioviz.Viz(Models.ACROBAT.value, show_now=False, show_meshes=True, show_global_center_of_mass=False,
-                   show_gravity_vector=False, show_floor=False, show_segments_center_of_mass=False,
-                   show_global_ref_frame=True, show_local_ref_frame=False, show_markers=False,
-                   show_muscles=False,
-                   show_wrappings=False, mesh_opacity=1.0, )
-    b.load_movement(q)
-    b.set_camera_roll(b.get_camera_roll() - np.pi / 2)
-    b.set_camera_position(b.get_camera_position()[0], b.get_camera_position()[1], height)
-    b.resize(1000, 2000)
-    b.start_recording(f"{height}m_RK4_new_pen_video")
-
-    for f in range(ns + 2):
-        b.movement_slider[0].setValue(f)
-        b.add_frame()
-    b.stop_recording()
-    b.quit()
-
-    # # height = 15
-    # #
-    # delta_energy = []
-    # delta_am = []
-    # delta_lm = []
-    #
-    # plt.figure(1)
-    # plt.title("Total energy")
-    # plt.figure(2)
-    # fig_time, axs_time = plt.subplots(1, 3, sharex=True)
-    # fig_delta, axs_delta = plt.subplots(1, 3, sharex=True)
-    # fig_lm, axs_lm = plt.subplots(1, 3, sharex=True)
-    # fig_am, axs_am = plt.subplots(1, 3, sharex=True)
-    #
-    # dic_heights = {
-    #     "RK4": [1, 3, 5, 10, 15, 20, 25],
-    #     "RK8": [3],
-    #     "COLLOCATION": [3, 5],
-    # }
+    # height = 5
+    # file_name = f"{height}m_COLLOCATION_0324"
+    # q, qdot, time, ns = get_created_data_from_pickle(file_name)
     #
     # model = biorbd.Model(Models.ACROBAT.value)
     #
-    # for ode_solver, heights in dic_heights.items():
-    #     for height in heights:
-    #         q, qdot, time, ns = get_created_data_from_pickle(f"{height}m_{ode_solver}")
+    # # Video
+    # b = bioviz.Viz(Models.ACROBAT.value, show_now=False, show_meshes=True, show_global_center_of_mass=False,
+    #                show_gravity_vector=False, show_floor=False, show_segments_center_of_mass=False,
+    #                show_global_ref_frame=True, show_local_ref_frame=False, show_markers=False,
+    #                show_muscles=False,
+    #                show_wrappings=False, mesh_opacity=1.0, )
+    # b.load_movement(q)
+    # b.set_camera_roll(b.get_camera_roll() - np.pi / 2)
+    # b.set_camera_position(b.get_camera_position()[0], b.get_camera_position()[1], height)
+    # b.resize(1000, 2000)
+    # b.start_recording(file_name + "video")
     #
-    #         # Energies
-    #         energy = discrete_total_energy(model, q, qdot)
-    #         angular_momentum_x, angular_momentum_y, angular_momentum_z, angular_momentum = discrete_angular_momentum(model, q, qdot)
-    #         linear_momentum_x, linear_momentum_y, linear_momentum_z, linear_momentum = discrete_linear_momentum(model, q, qdot)
-    #         delta_energy.append(energy)
-    #         delta_am.append(angular_momentum)
-    #         delta_lm.append(linear_momentum)
-    #
-    #         plt.figure(1)
-    #         plt.plot(time, energy, label=f"{height}m_{ode_solver}")
-    #
-    #         axs_time[0].plot(time, energy, label=f"{height}m_{ode_solver}")
-    #         axs_time[1].plot(time, angular_momentum, label=f"{height}m_{ode_solver}")
-    #         axs_time[2].plot(time, linear_momentum, label=f"{height}m_{ode_solver}")
-    #
-    #         axs_lm[0].plot(time, linear_momentum_x, marker="o", ms=3, label=f"{height}m_{ode_solver}")
-    #         axs_lm[1].plot(time, linear_momentum_y, label=f"{height}m_{ode_solver}")
-    #         axs_lm[2].plot(time, linear_momentum_z, label=f"{height}m_{ode_solver}")
-    #
-    #         axs_am[0].plot(time, angular_momentum_x, label=f"{height}m_{ode_solver}")
-    #         axs_am[1].plot(time, angular_momentum_y, label=f"{height}m_{ode_solver}")
-    #         axs_am[2].plot(time, angular_momentum_z, label=f"{height}m_{ode_solver}")
-    #
-    # # axs_delta[0].boxplot(delta_energy, labels=heights)
-    # # axs_delta[1].boxplot(delta_am, labels=heights)
-    # # axs_delta[2].boxplot(delta_lm, labels=heights)
-    # # axs_time[2].legend(ncols=3, bbox_to_anchor=(0, -0.05))
-    #
-    # plt.figure(1)
-    # plt.legend()
-    #
-    # axs_time[0].set_title("Total energy")
-    # axs_time[1].set_title("Angular momentum norm")
-    # axs_time[2].set_title("Linear momentum norm")
-    #
-    # axs_lm[0].set_title("Linear momentum x")
-    # axs_lm[1].set_title("Linear momentum y")
-    # axs_lm[2].set_title("Linear momentum z")
-    # axs_lm[2].legend(ncols=3, bbox_to_anchor=(0, -0.05))
-    #
-    # axs_am[0].set_title("Angular momentum x")
-    # axs_am[1].set_title("Angular momentum y")
-    # axs_am[2].set_title("Angular momentum z")
-    # axs_am[2].legend(ncols=3, bbox_to_anchor=(0, -0.05))
-    #
-    # axs_delta[0].set_title("Energy")
-    # axs_delta[1].set_title("Angular momentum")
-    # axs_delta[2].set_title("Linear momentum")
-    # fig_delta.suptitle("RK4")
+    # for f in range(ns + 2):
+    #     b.movement_slider[0].setValue(f)
+    #     b.add_frame()
+    # b.stop_recording()
+    # b.quit()
+
+    delta_energy = []
+    delta_am = []
+    delta_lm = []
+
+    plt.figure(1)
+    plt.title("Total energy")
+    plt.figure(2)
+    fig_time, axs_time = plt.subplots(1, 3, sharex=True)
+    fig_delta, axs_delta = plt.subplots(1, 3, sharex=True)
+    fig_lm, axs_lm = plt.subplots(1, 3, sharex=True)
+    fig_am, axs_am = plt.subplots(1, 3, sharex=True)
+
+    dic_heights = {
+        "RK4_0317": [3, 5, 10, 15, 20, 25],
+        # "RK8": [3],
+        "COLLOCATION_0324": [3, 5, 10, 15, 20, ],
+    }
+
+    dic_colors = {
+        "RK4_0317": "red",
+        "COLLOCATION_0324": "blue",
+    }
+
+    model = biorbd.Model(Models.ACROBAT.value)
+
+    ode_solvers = []
+    bp = []
+    for j, (ode_solver, heights) in enumerate(dic_heights.items()):
+        ode_solvers.append(ode_solver)
+        energies = []
+        labels = []
+        for height in heights:
+            q, qdot, time, ns = get_created_data_from_pickle(f"{height}m_{ode_solver}")
+
+            # Energies
+            energy = discrete_total_energy(model, q, qdot)
+            angular_momentum_x, angular_momentum_y, angular_momentum_z, angular_momentum = discrete_angular_momentum(model, q, qdot)
+            linear_momentum_x, linear_momentum_y, linear_momentum_z, linear_momentum = discrete_linear_momentum(model, q, qdot)
+            delta_energy.append(energy)
+            delta_am.append(angular_momentum)
+            delta_lm.append(linear_momentum)
+            energies.append(energy - energy[0])
+            labels.append(f"{height} m")
+
+            plt.figure(1)
+            plt.plot(time, energy, label=f"{height}m_{ode_solver}")
+
+            axs_time[0].plot(time, energy, label=f"{height}m_{ode_solver}")
+            axs_time[1].plot(time, angular_momentum, label=f"{height}m_{ode_solver}")
+            axs_time[2].plot(time, linear_momentum, label=f"{height}m_{ode_solver}")
+
+            axs_lm[0].plot(time, linear_momentum_x, marker="o", ms=3, label=f"{height}m_{ode_solver}")
+            axs_lm[1].plot(time, linear_momentum_y, label=f"{height}m_{ode_solver}")
+            axs_lm[2].plot(time, linear_momentum_z, label=f"{height}m_{ode_solver}")
+
+            axs_am[0].plot(time, angular_momentum_x, label=f"{height}m_{ode_solver}")
+            axs_am[1].plot(time, angular_momentum_y, label=f"{height}m_{ode_solver}")
+            axs_am[2].plot(time, angular_momentum_z, label=f"{height}m_{ode_solver}")
+
+    # axs_delta[0].boxplot(delta_energy, labels=heights)
+    # axs_delta[1].boxplot(delta_am, labels=heights)
+    # axs_delta[2].boxplot(delta_lm, labels=heights)
     # axs_time[2].legend(ncols=3, bbox_to_anchor=(0, -0.05))
-    # plt.show()
+
+        plt.figure(2)
+
+        bp.append(plt.boxplot(energies, positions=[i + 0.3 * j for i in range(len(energies))], widths=[0.2 for i in range(len(energies))],
+                    boxprops=dict(color=dic_colors[ode_solver]),
+                    capprops=dict(color=dic_colors[ode_solver]),
+                    whiskerprops=dict(color=dic_colors[ode_solver]),
+                    flierprops=dict(color=dic_colors[ode_solver], markeredgecolor=dic_colors[ode_solver]),
+                    medianprops=dict(color=dic_colors[ode_solver])
+                    )["boxes"][0])
+        plt.xticks([i for i in range(5)], ['3 m', '5 m', '10 m', '15 m', '20 m'])
+        plt.legend(bp, ode_solvers)
+
+    plt.title("Energy conservation in function of the jump height")
+    plt.xlabel("Heights")
+    plt.ylabel("Energy centered on the energy at the first iteration (J)")
+
+    plt.figure(1)
+    plt.legend()
+
+    axs_time[0].set_title("Total energy")
+    axs_time[1].set_title("Angular momentum norm")
+    axs_time[2].set_title("Linear momentum norm")
+
+    axs_lm[0].set_title("Linear momentum x")
+    axs_lm[1].set_title("Linear momentum y")
+    axs_lm[2].set_title("Linear momentum z")
+    axs_lm[2].legend(ncols=3, bbox_to_anchor=(0, -0.05))
+
+    axs_am[0].set_title("Angular momentum x")
+    axs_am[1].set_title("Angular momentum y")
+    axs_am[2].set_title("Angular momentum z")
+    axs_am[2].legend(ncols=3, bbox_to_anchor=(0, -0.05))
+
+    axs_delta[0].set_title("Energy")
+    axs_delta[1].set_title("Angular momentum")
+    axs_delta[2].set_title("Linear momentum")
+    fig_delta.suptitle("RK4")
+    axs_time[2].legend(ncols=3, bbox_to_anchor=(0, -0.05))
+    plt.show()
