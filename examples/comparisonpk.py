@@ -1,5 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import seaborn as sns
+
 
 import biorbd
 import bioviz
@@ -190,30 +193,32 @@ if __name__ == "__main__":
     delta_lm = []
 
     plt.figure(1)
-    plt.title("Total energy")
-    plt.figure(2)
     fig_time, axs_time = plt.subplots(1, 3, sharex=True)
-    fig_delta, axs_delta = plt.subplots(1, 3, sharex=True)
     fig_lm, axs_lm = plt.subplots(1, 3, sharex=True)
     fig_am, axs_am = plt.subplots(1, 3, sharex=True)
 
     dic_heights = {
         "RK4_0317": [3, 5, 10, 15, 20, 25],
-        # "RK8": [3],
-        "COLLOCATION_0324": [3, 5, 10, 15, 20, ],
+        "COLLOCATION_0324": [3, 5, 10, 15, 20, 25],
+    }
+
+    dic_points = {
+        "RK4_0317": "-",
+        "COLLOCATION_0324": "--",
     }
 
     dic_colors = {
-        "RK4_0317": "red",
-        "COLLOCATION_0324": "blue",
+        "3": "b",
+        "5": "g",
+        "10": "r",
+        "15": "c",
+        "20": "m",
+        "25": "k",
     }
-
     model = biorbd.Model(Models.ACROBAT.value)
 
-    ode_solvers = []
-    bp = []
+    data = []
     for j, (ode_solver, heights) in enumerate(dic_heights.items()):
-        ode_solvers.append(ode_solver)
         energies = []
         labels = []
         for height in heights:
@@ -228,15 +233,22 @@ if __name__ == "__main__":
             delta_lm.append(linear_momentum)
             energies.append(energy - energy[0])
             labels.append(f"{height} m")
+            for i, e in enumerate(energy - energy[0]):
+                if ode_solver == "RK4_0317":
+                    data.append({'height': height, 'RK4': e})
+                elif ode_solver == "COLLOCATION_0324":
+                    data.append({'height': height, 'COLLOCATION': e})
 
             plt.figure(1)
-            plt.plot(time, energy, label=f"{height}m_{ode_solver}")
+            plt.plot(time, energy,
+                     dic_colors[f"{height}"] + dic_points[ode_solver],
+                     label=f"{height}m {ode_solver[:-5]}")
 
             axs_time[0].plot(time, energy, label=f"{height}m_{ode_solver}")
             axs_time[1].plot(time, angular_momentum, label=f"{height}m_{ode_solver}")
             axs_time[2].plot(time, linear_momentum, label=f"{height}m_{ode_solver}")
 
-            axs_lm[0].plot(time, linear_momentum_x, marker="o", ms=3, label=f"{height}m_{ode_solver}")
+            axs_lm[0].plot(time, linear_momentum_x, label=f"{height}m_{ode_solver}")
             axs_lm[1].plot(time, linear_momentum_y, label=f"{height}m_{ode_solver}")
             axs_lm[2].plot(time, linear_momentum_z, label=f"{height}m_{ode_solver}")
 
@@ -244,28 +256,10 @@ if __name__ == "__main__":
             axs_am[1].plot(time, angular_momentum_y, label=f"{height}m_{ode_solver}")
             axs_am[2].plot(time, angular_momentum_z, label=f"{height}m_{ode_solver}")
 
-    # axs_delta[0].boxplot(delta_energy, labels=heights)
-    # axs_delta[1].boxplot(delta_am, labels=heights)
-    # axs_delta[2].boxplot(delta_lm, labels=heights)
-    # axs_time[2].legend(ncols=3, bbox_to_anchor=(0, -0.05))
-
-        plt.figure(2)
-
-        bp.append(plt.boxplot(energies, positions=[i + 0.3 * j for i in range(len(energies))], widths=[0.2 for i in range(len(energies))],
-                    boxprops=dict(color=dic_colors[ode_solver]),
-                    capprops=dict(color=dic_colors[ode_solver]),
-                    whiskerprops=dict(color=dic_colors[ode_solver]),
-                    flierprops=dict(color=dic_colors[ode_solver], markeredgecolor=dic_colors[ode_solver]),
-                    medianprops=dict(color=dic_colors[ode_solver])
-                    )["boxes"][0])
-        plt.xticks([i for i in range(5)], ['3 m', '5 m', '10 m', '15 m', '20 m'])
-        plt.legend(bp, ode_solvers)
-
-    plt.title("Energy conservation in function of the jump height")
-    plt.xlabel("Heights")
-    plt.ylabel("Energy centered on the energy at the first iteration (J)")
-
     plt.figure(1)
+    plt.title("Energy")
+    plt.xlabel("Times (s)")
+    plt.ylabel("Energy (J)")
     plt.legend()
 
     axs_time[0].set_title("Total energy")
@@ -282,9 +276,18 @@ if __name__ == "__main__":
     axs_am[2].set_title("Angular momentum z")
     axs_am[2].legend(ncols=3, bbox_to_anchor=(0, -0.05))
 
-    axs_delta[0].set_title("Energy")
-    axs_delta[1].set_title("Angular momentum")
-    axs_delta[2].set_title("Linear momentum")
-    fig_delta.suptitle("RK4")
-    axs_time[2].legend(ncols=3, bbox_to_anchor=(0, -0.05))
+    df = pd.DataFrame(data)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.boxplot(x='height', y='value', hue='variable',
+                data=pd.melt(df, id_vars=['height'], var_name='variable', value_name='value'), ax=ax, showfliers=False)
+    sns.stripplot(x='height', y='value', hue='variable',
+                  data=pd.melt(df, id_vars=['height'], var_name='variable', value_name='value'), dodge=True,
+                  jitter=True, color='black', alpha=0.5, ax=ax, size=2.0, label=None)
+    ax.set_xlabel('Height (m)')
+    ax.set_ylabel("Energy centered on the energy at the first iteration (J)")
+    ax.set_title("Energy conservation in function of the jump height and ODE solver")
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles[:3], labels[:2] + ['Data'], title='ODE solver')
+
     plt.show()
