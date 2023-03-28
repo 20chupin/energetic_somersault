@@ -241,6 +241,11 @@ class MillerOcp:
                     with_contact=False,
                     rigidbody_dynamics=RigidBodyDynamics.ODE,
                 )
+            elif self.dynamics_function == DynamicsFcn.JOINTS_ACCELERATION_DRIVEN:
+                self.dynamics.add(
+                    self.dynamics_function,
+                    rigidbody_dynamics=RigidBodyDynamics.ODE,
+                )
             else:
                 raise ValueError("This dynamics has not been implemented")
 
@@ -849,10 +854,15 @@ class MillerOcp:
         Set the mapping between the states and controls of the model
         """
         if self.dynamics_function == DynamicsFcn.TORQUE_DRIVEN:
-            self.mapping.add(
-                "tau",
-                to_second=[None, None, None, None, None, None, 0, 1, 2, 3, 4, 5, 6, 7, 8],
-                to_first=[6, 7, 8, 9, 10, 11, 12, 13, 14],
+            # self.mapping.add(
+            #     "tau",
+            #     to_second=[None, None, None, None, None, None, 0, 1, 2, 3, 4, 5, 6, 7, 8],
+            #     to_first=[6, 7, 8, 9, 10, 11, 12, 13, 14],
+            # )
+            bimap = SelectionMapping(
+                nb_elements=bio_model.nb_dof,
+                independent_indices=(6, 7, 8, 9, 10, 11, 12, 13, 14),
+                dependencies=None,
             )
         elif self.dynamics_function == DynamicsFcn.JOINTS_ACCELERATION_DRIVEN:
             print("no bimapping")

@@ -200,20 +200,22 @@ if __name__ == "__main__":
     dic_heights = {
         "RK4_0317": [3, 5, 10, 15, 20, 25],
         "COLLOCATION_0324": [3, 5, 10, 15, 20, 25],
+        "ACC-DRIVEN_RK4_0327": [3, 5, 10, 15, 20, ],
     }
 
     dic_points = {
-        "RK4_0317": "-",
-        "COLLOCATION_0324": "--",
+        "RK4_0317": "g",
+        "COLLOCATION_0324": "c",
+        "ACC-DRIVEN_RK4_0327": "m"
     }
 
     dic_colors = {
-        "3": "b",
-        "5": "g",
-        "10": "r",
-        "15": "c",
-        "20": "m",
-        "25": "k",
+        "3": (0, ()),
+        "5": (0, (1, 1)),
+        "10": (0, (1, 10)),
+        "15": (5, (10, 3)),
+        "20": (0, (3, 1, 1, 1)),
+        "25": (0, (3, 5, 1, 5)),
     }
     model = biorbd.Model(Models.ACROBAT.value)
 
@@ -238,10 +240,12 @@ if __name__ == "__main__":
                     data.append({'height': height, 'RK4': e})
                 elif ode_solver == "COLLOCATION_0324":
                     data.append({'height': height, 'COLLOCATION': e})
+                elif ode_solver == "ACC-DRIVEN_RK4_0327":
+                    data.append({'height': height, 'ACC-DRIVEN_RK4': e})
 
             plt.figure(1)
             plt.plot(time, energy,
-                     dic_colors[f"{height}"] + dic_points[ode_solver],
+                     dic_points[ode_solver], linestyle=dic_colors[f"{height}"],
                      label=f"{height}m {ode_solver[:-5]}")
 
             axs_time[0].plot(time, energy, label=f"{height}m_{ode_solver}")
@@ -288,6 +292,6 @@ if __name__ == "__main__":
     ax.set_ylabel("Energy centered on the energy at the first iteration (J)")
     ax.set_title("Energy conservation in function of the jump height and ODE solver")
     handles, labels = ax.get_legend_handles_labels()
-    ax.legend(handles[:3], labels[:2] + ['Data'], title='ODE solver')
+    ax.legend(handles[:4], labels[:3] + ['Data'], title='ODE solver')
 
     plt.show()
