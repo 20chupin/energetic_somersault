@@ -15,8 +15,49 @@ import biorbd
 
 from somersault import Models
 
+from typing import Callable
 
-def get_created_data_from_pickle(file: str, ode_solver_name: str):
+
+def RK4(t, f: Callable, y0: np.ndarray, args=()):
+    """
+    Runge-Kutta 4th order method
+
+    Parameters
+    ----------
+    t : array_like
+    time steps
+    f : Callable
+    function to be integrated in the form f(t, y, *args)
+    y0 : np.ndarray
+    initial conditions of states
+
+    Returns
+    -------
+    y : array_like
+    states for each time step
+
+    """
+    n = len(t)
+    y = np.zeros((len(y0), n))
+    y[:, 0] = y0
+    for i in range(n - 1):
+        h = t[i + 1] - t[i]
+        yi = np.squeeze(y[:, i])
+        k1 = f(t[i], yi, args)
+        k2 = f(t[i] + h / 2.0, yi + k1 * h / 2.0, args)
+        k3 = f(t[i] + h / 2.0, yi + k2 * h / 2.0, args)
+        k4 = f(t[i] + h, yi + k3 * h, args)
+        y[:, i + 1] = yi + (h / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+    return y
+
+
+def fun(t, yi, qddotj):
+    q = yi[:15]
+    qdot = yi[15:]
+    return np.concatenate((qdot, model.ForwardDynamicsFreeFloatingBase(q, qdot, qddotj).to_array(), qddotj))
+
+
+def get_created_data_from_pickle(file: str, ode_solver_name: str, intermediary_states: bool = True):
     """
     Creates data from pickle
 
@@ -26,6 +67,9 @@ def get_created_data_from_pickle(file: str, ode_solver_name: str):
         File where data has been saved
     ode_solver_name: str
         Name of the ode_solver in the pickle file names.
+    intermediary_states: bool
+        If True, the data will be created from the states with intermediary nodes. If False, the data will be created
+        from the states without intermediary nodes.
 
     Returns
     -------
@@ -71,7 +115,62 @@ def get_created_data_from_pickle(file: str, ode_solver_name: str):
         datas_time[shape_0_1:] = data_tmp["time"][1][::step]
 
         # Torques
-        if ode_solver_name == "ACC-DRIVEN_RK4_0327":
+        if ode_solver_name == "ACC-DRIVEN_RK4_0327" and intermediary_states:
+            nb_reint = 100
+            datas_q_int = np.zeros((datas_shape[0], (datas_shape[1] - 1) * nb_reint + 1))
+            datas_qdot_int = np.zeros((datas_shape[0], (datas_shape[1] - 1) * nb_reint + 1))
+            datas_time_int = np.zeros((datas_shape[1] - 1) * nb_reint + 1)
+            datas_qddot_joints_int = np.zeros((9, (datas_shape[1] - 1) * nb_reint + 1))
+
+            # qddotj
+            qddot_joints_shape = (
+                data_tmp["controls"][0]["qddot_joints"].shape[0],
+                data_tmp["controls"][0]["qddot_joints"].shape[1] - 1 + data_tmp["controls"][1]["qddot_joints"].shape[1])
+
+            datas_qddot_joints = np.zeros((qddot_joints_shape[0], qddot_joints_shape[1]))
+            datas_qddot_joints[:, :data_tmp["controls"][0]["qddot_joints"].shape[1] - 1] = \
+                data_tmp["controls"][0]["qddot_joints"][:, :-1]
+            datas_qddot_joints[:, data_tmp["controls"][0]["qddot_joints"].shape[1] - 1:] = \
+                data_tmp["controls"][1]["qddot_joints"]
+
+            # Intermediary states
+            for i in range(datas_shape[1] - 1):
+                datas_time_int[i*nb_reint:(i+1)*nb_reint + 1] = \
+                    np.linspace(datas_time[i], datas_time[i+1], nb_reint + 1)
+                for j in range(i * nb_reint, (i + 1) * nb_reint):
+                    datas_qddot_joints_int[:, j] = datas_qddot_joints[:, i]
+                q_int = RK4(
+                    datas_time_int[i*nb_reint:(i+1)*nb_reint],
+                    fun,
+                    np.concatenate((datas_q[:, i], datas_qdot[:, i])),
+                    args=(datas_qddot_joints[:, i]))
+                datas_q_int[:, i*nb_reint:(i+1)*nb_reint] = q_int[:15, :nb_reint]
+                datas_qdot_int[:, i*nb_reint:(i+1)*nb_reint] = q_int[15:, :nb_reint]
+
+            datas_q_int[:, -1] = datas_q[:, -1]
+            datas_qdot_int[:, -1] = datas_qdot[:, -1]
+            datas_qddot_joints_int[:, -1] = datas_qddot_joints[:, -1]
+            # qddotb
+            datas_qddot_floating_base_int = np.zeros((6, (datas_shape[1] - 1) * nb_reint + 1))
+            for i in range(datas_q_int.shape[1]):
+                datas_qddot_floating_base_int[:, i] = model.ForwardDynamicsFreeFloatingBase(
+                    datas_q_int[:, i], datas_qdot_int[:, i], datas_qddot_joints_int[:, i]
+                ).to_array()
+
+            datas_qddot_int = np.concatenate((datas_qddot_floating_base_int, datas_qddot_joints_int), axis=0)
+
+            datas_tau_int = np.zeros((9, (datas_shape[1] - 1) * nb_reint + 1))
+
+            for i in range(datas_q_int.shape[1]):
+                datas_tau_int[:, i] = \
+                    model.InverseDynamics(datas_q_int[:, i], datas_qdot_int[:, i], datas_qddot_int[:, i]).to_array()[6:]
+
+            datas_q = datas_q_int
+            datas_qdot = datas_qdot_int
+            datas_time = datas_time_int
+            datas_tau = datas_tau_int
+
+        elif ode_solver_name == "ACC-DRIVEN_RK4_0327" and not intermediary_states:
             # qddotj
             qddot_joints_shape = (
                 data_tmp["controls"][0]["qddot_joints"].shape[0],
@@ -203,13 +302,21 @@ if __name__ == "__main__":
             energy = discrete_mechanical_energy(model, q, qdot) - work_f_dx(tau, q)
             energy = abs(energy - energy[0]) + 1e-10
 
+            # if ode_solver == "ACC-DRIVEN_RK4_0327":
+            #     q2, qdot2, time2, tau2 = get_created_data_from_pickle(f"{height}m_{ode_solver}", ode_solver, False)
+            #
+            #     energy2 = discrete_mechanical_energy(model, q2, qdot2) - work_f_dx(tau2, q2)
+            #     energy2 = abs(energy2 - energy2[0]) + 1e-10
+            #     for e2 in energy2:
+            #         data.append({'height': height, 'ACC-DRIVEN_RK4': e2})
+
             for e in energy:
                 if ode_solver == "RK4_0317":
                     data.append({'height': height, 'RK4': e})
                 elif ode_solver == "COLLOCATION_0324":
                     data.append({'height': height, 'COLLOCATION': e})
                 elif ode_solver == "ACC-DRIVEN_RK4_0327":
-                    data.append({'height': height, 'ACC-DRIVEN_RK4': e})
+                    data.append({'height': height, 'ACC-DRIVEN_RK4_REINT': e})
 
             # Energy error % time
             ax.semilogy(
